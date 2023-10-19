@@ -118,16 +118,16 @@ class TelegramMessageParser:
         # reply response to user
         # await update.message.reply_text(self.escape_str(response), parse_mode='MarkdownV2')
         LoggingManager.debug("Sending response to user: %s" % str(update.effective_user.id), "TelegramMessageParser")
-        #sent = await update.message.reply_text(response) #旧版回复消息
+        await update.message.reply_text(response) #旧版回复消息
         #新版定时删除消息
-        sent = await context.bot.send_message(
-                chat_id = update.effective_chat.id,
-                text = response
-            )
+        #sent = await context.bot.send_message(
+        #        chat_id = update.effective_chat.id,
+        #        text = response
+        #    )
 
-        time.sleep(60) # 等待60秒后删除对话
-        await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  sent.message_id) # 删除bot消息
-        await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  update.message.message_id) # 删除用户消息
+        #time.sleep(60) # 等待60秒后删除对话
+        #await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  sent.message_id) # 删除bot消息
+        #await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  update.message.message_id) # 删除用户消息
 
 
     # command chat messages
@@ -160,16 +160,16 @@ class TelegramMessageParser:
 
         # reply response to user
         LoggingManager.debug("Sending response to user: %s" % str(update.effective_user.id), "TelegramMessageParser")
-        #sent = await update.message.reply_text(response) #旧版回复消息
+        await update.message.reply_text(response) #旧版回复消息
         #新版定时删除消息
-        sent = await context.bot.send_message(
-                chat_id = update.effective_chat.id,
-                text = response
-            )
+        #sent = await context.bot.send_message(
+        #        chat_id = update.effective_chat.id,
+        #        text = response
+        #    )
 
-        time.sleep(60) # 等待60秒后删除对话
-        await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  sent.message_id) # 删除bot消息
-        await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  update.message.message_id) # 删除用户消息
+        #time.sleep(60) # 等待60秒后删除对话
+        #await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  sent.message_id) # 删除bot消息
+        #await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  update.message.message_id) # 删除用户消息
 
 
     # voice message in private chat, speech to text with Azure Speech Studio and process with Azure OpenAI
