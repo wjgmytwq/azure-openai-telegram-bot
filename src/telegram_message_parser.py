@@ -126,7 +126,7 @@ class TelegramMessageParser:
                 chat_id = update.effective_chat.id,
                 text = response
             )
-        await asyncio.sleep(600)
+        await asyncio.sleep(300)
         await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  sent.message_id)
         await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  update.message.message_id)
 
@@ -167,7 +167,7 @@ class TelegramMessageParser:
                 chat_id = update.effective_chat.id,
                 text = response
             )
-        await asyncio.sleep(600)
+        await asyncio.sleep(300)
         await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  sent.message_id)
         await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  update.message.message_id)
 
