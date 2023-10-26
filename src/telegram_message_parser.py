@@ -16,9 +16,14 @@ from telegram import Update, InlineQueryResultArticle, InputTextMessageContent, 
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, InlineQueryHandler, ChosenInlineResultHandler, ContextTypes, filters
 import json, os
 import logging
-import asyncio
-import time
 import subprocess
+import requests
+#from threading import Timer
+import time
+import asyncio
+import threading
+import datetime
+from apscheduler.schedulers.blocking import BlockingScheduler
 from uuid import uuid4
 from message_manager import MessageManager
 from logging_manager import LoggingManager
@@ -82,9 +87,11 @@ class TelegramMessageParser:
         # normal chat messages handlers in private chat
         self.bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), self.chat_text))
         self.bot.add_handler(CommandHandler("chat", self.chat_text_command))
+        self.bot.add_handler(CommandHandler("stock", self.stock_text_command))#新增股票查询接口
 
         # unknown command handler
         self.bot.add_handler(MessageHandler(filters.COMMAND, self.unknown))
+
 
     # normal chat messages
     async def chat_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -120,16 +127,16 @@ class TelegramMessageParser:
         # reply response to user
         # await update.message.reply_text(self.escape_str(response), parse_mode='MarkdownV2')
         LoggingManager.debug("Sending response to user: %s" % str(update.effective_user.id), "TelegramMessageParser")
-        #await update.message.reply_text(response) #旧版回复消息
-        #新版定时删除消息
-        sent = await context.bot.send_message(
-                chat_id = update.effective_chat.id,
-                text = response
-            )
-        await asyncio.sleep(300)
-        await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  sent.message_id)
-        await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  update.message.message_id)
+        await update.message.reply_text(response) #旧版回复消息
 
+        #最新版定时删除消息
+        #sent = await context.bot.send_message(
+        #        chat_id = update.effective_chat.id,
+        #        text = response
+        #    )
+        #await asyncio.sleep(300)
+        #await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  sent.message_id)
+        #await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  update.message.message_id)
 
     # command chat messages
     async def chat_text_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -161,15 +168,60 @@ class TelegramMessageParser:
 
         # reply response to user
         LoggingManager.debug("Sending response to user: %s" % str(update.effective_user.id), "TelegramMessageParser")
-        #await update.message.reply_text(response) #旧版回复消息
+        await update.message.reply_text(response) #旧版回复消息
         #新版定时删除消息
-        sent = await context.bot.send_message(
+        #sent = await context.bot.send_message(
+        #        chat_id = update.effective_chat.id,
+        #        text = response
+        #    )
+        #await asyncio.sleep(300)
+        #await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  sent.message_id)
+        #await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  update.message.message_id)
+
+    # command stock messages
+    async def stock_text_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        LoggingManager.info("Get a chat message (triggered by command) from user: %s" % str(update.effective_user.id), "TelegramMessageParser")
+        # get message
+        message = " ".join(context.args)
+
+        # sending typing action
+        await context.bot.send_chat_action(
+            chat_id=update.effective_chat.id,
+            action="typing"
+        )
+
+        # check if user is allowed
+        allowed, _ = self.access_manager.check_user_allowed(str(update.effective_user.id))
+        if not allowed:
+            await context.bot.send_message(
                 chat_id = update.effective_chat.id,
-                text = response
+                text = "Sorry, you are not allowed to use this bot."
             )
-        await asyncio.sleep(300)
-        await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  sent.message_id)
-        await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  update.message.message_id)
+            return
+
+        # get stock
+        response1 = requests.get('http://qt.gtimg.cn/q=sh000001').text
+        response2 = requests.get('http://qt.gtimg.cn/q=sz399001').text
+
+
+        shlist = response1.split('~')
+        szlist = response2.split('~')
+
+        messagesh = shlist[1] + '  实时：' + shlist[3] + '  最高：' + shlist[4] + ' 今开：' + shlist[5] + ' 涨跌：' + str(round(float(shlist[3]) - float(shlist[5]),2)) + ' 涨幅：' + str(round(((float(shlist[3]) - float(shlist[5])) / (float(shlist[5]) + 0.0000000000001)) * 100.00,2))  + '%' + '\n'
+        messagesz = szlist[1] + '  实时：' + szlist[3] + '  最高：' + szlist[4] + ' 今开：' + szlist[5] + ' 涨跌：' + str(round(float(szlist[3]) - float(szlist[5]),2)) + ' 涨幅：' + str(round(((float(szlist[3]) - float(szlist[5])) / (float(szlist[5]) + 0.0000000000001)) * 100.00,2))  + '%' +  '\n'
+        
+        messageall = messagesh + messagesz
+
+        for stockstr in context.args:
+            responsetmp = requests.get('http://qt.gtimg.cn/q=' + stockstr).text
+            tmplist = responsetmp.split('~')
+            messagetmp = tmplist[1] + '  实时：' + tmplist[3] + '  最高：' + tmplist[4] + ' 今开：' + tmplist[5] + ' 涨跌：' + str(round(float(tmplist[3]) - float(tmplist[5]),2)) + ' 涨幅：' + str(round(((float(tmplist[3]) - float(tmplist[5])) / (float(tmplist[5]) + 0.000000000001)) * 100.00,2))  + '%' + '\n'
+            messageall += messagetmp
+
+
+        # reply response to user
+        LoggingManager.debug("Sending response to user: %s" % str(update.effective_user.id), "TelegramMessageParser")
+        await update.message.reply_text(messageall + ' ') #旧版回复消息
 
 
     # voice message in private chat, speech to text with Azure Speech Studio and process with Azure OpenAI
