@@ -14,6 +14,13 @@ __status__ = Dev
 
 from telegram import Update, InlineQueryResultArticle, InputTextMessageContent, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, InlineQueryHandler, ChosenInlineResultHandler, ContextTypes, filters
+from telegram import BotCommandScopeAllGroupChats, Update, constants
+from telegram import InlineKeyboardMarkup, InlineKeyboardButton, InlineQueryResultArticle
+from telegram import InputTextMessageContent, BotCommand
+from telegram.error import RetryAfter, TimedOut
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, \
+    filters, InlineQueryHandler, CallbackQueryHandler, Application, ContextTypes, CallbackContext
+import prettytable as pt
 import json, os
 import logging
 import subprocess
@@ -57,6 +64,16 @@ class TelegramMessageParser:
 
         # TODO: init AzureParser
         self.azure_parser = AzureParser()
+
+        #self.commands = [
+        #    #BotCommand(command='chat', description='对话AI助理'),
+        #    BotCommand(command='stock', description='获取大盘指数'),
+        #    BotCommand(command='clear', description='清除上下文'),
+        #    BotCommand(command='getid', description='获取userid'),
+        #    BotCommand(command='role', description='修改promt')
+        #]
+        #self.group_commands = [BotCommand(command='chat', description='对话AI助理')] + self.commands
+
 
     def run_polling(self):
         LoggingManager.info("Starting polling, the bot is now running...", "TelegramMessageParser")
@@ -127,16 +144,16 @@ class TelegramMessageParser:
         # reply response to user
         # await update.message.reply_text(self.escape_str(response), parse_mode='MarkdownV2')
         LoggingManager.debug("Sending response to user: %s" % str(update.effective_user.id), "TelegramMessageParser")
-        await update.message.reply_text(response) #旧版回复消息
+        #await update.message.reply_text(response) #旧版回复消息
 
         #最新版定时删除消息
-        #sent = await context.bot.send_message(
-        #        chat_id = update.effective_chat.id,
-        #        text = response
-        #    )
-        #await asyncio.sleep(300)
-        #await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  sent.message_id)
-        #await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  update.message.message_id)
+        sent = await context.bot.send_message(
+                chat_id = update.effective_chat.id,
+                text = response
+            )
+        await asyncio.sleep(300)
+        await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  sent.message_id)
+        await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  update.message.message_id)
 
     # command chat messages
     async def chat_text_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -168,15 +185,15 @@ class TelegramMessageParser:
 
         # reply response to user
         LoggingManager.debug("Sending response to user: %s" % str(update.effective_user.id), "TelegramMessageParser")
-        await update.message.reply_text(response) #旧版回复消息
+        #await update.message.reply_text(response) #旧版回复消息
         #新版定时删除消息
-        #sent = await context.bot.send_message(
-        #        chat_id = update.effective_chat.id,
-        #        text = response
-        #    )
-        #await asyncio.sleep(300)
-        #await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  sent.message_id)
-        #await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  update.message.message_id)
+        sent = await context.bot.send_message(
+                chat_id = update.effective_chat.id,
+                text = response
+            )
+        await asyncio.sleep(300)
+        await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  sent.message_id)
+        await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  update.message.message_id)
 
     # command stock messages
     async def stock_text_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -199,29 +216,50 @@ class TelegramMessageParser:
             )
             return
 
-        # get stock
-        response1 = requests.get('http://qt.gtimg.cn/q=sh000001').text
-        response2 = requests.get('http://qt.gtimg.cn/q=sz399001').text
+        # get stock 默认增加几个常用指数
 
+        stocklist = ['sh000001','sz399001','sh000300','sz399006','sh000905']
+        if len(context.args):
+            stocklist = context.args
+            
+        messageall = ''
 
-        shlist = response1.split('~')
-        szlist = response2.split('~')
+        #table = pt.PrettyTable(['名称', '实时', '昨收','今开','涨跌','比例'])
+        #table.align['名称'] = 'l'
+        #table.align['实时'] = 'r'
+        #table.align['昨收'] = 'r'
+        #table.align['今开'] = 'l'
+        #table.align['涨跌'] = 'r'
+        #table.align['比例'] = 'r'
 
-        messagesh = shlist[1] + '  实时：' + shlist[3] + '  最高：' + shlist[4] + ' 今开：' + shlist[5] + ' 涨跌：' + str(round(float(shlist[3]) - float(shlist[5]),2)) + ' 涨幅：' + str(round(((float(shlist[3]) - float(shlist[5])) / (float(shlist[5]) + 0.0000000000001)) * 100.00,2))  + '%' + '\n'
-        messagesz = szlist[1] + '  实时：' + szlist[3] + '  最高：' + szlist[4] + ' 今开：' + szlist[5] + ' 涨跌：' + str(round(float(szlist[3]) - float(szlist[5]),2)) + ' 涨幅：' + str(round(((float(szlist[3]) - float(szlist[5])) / (float(szlist[5]) + 0.0000000000001)) * 100.00,2))  + '%' +  '\n'
-        
-        messageall = messagesh + messagesz
-
-        for stockstr in context.args:
+        for stockstr in stocklist:
             responsetmp = requests.get('http://qt.gtimg.cn/q=' + stockstr).text
             tmplist = responsetmp.split('~')
-            messagetmp = tmplist[1] + '  实时：' + tmplist[3] + '  最高：' + tmplist[4] + ' 今开：' + tmplist[5] + ' 涨跌：' + str(round(float(tmplist[3]) - float(tmplist[5]),2)) + ' 涨幅：' + str(round(((float(tmplist[3]) - float(tmplist[5])) / (float(tmplist[5]) + 0.000000000001)) * 100.00,2))  + '%' + '\n'
+            stockname = tmplist[1]
+            stockcurrent = tmplist[3]
+            stockyestoday = tmplist[4]
+            stocktoday = tmplist[5]
+            stockupdown = str(round(float(tmplist[3]) - float(tmplist[4]),2))
+            stockupdownpercent = str(round(((float(tmplist[3]) - float(tmplist[4])) / (float(tmplist[4]) + 0.000000000001)) * 100.00,2))
+            #table.add_row([stockname,stockcurrent,stockyestoday,stocktoday,stockupdown,stockupdownpercent+'%'])
+            messagetmp = '<b>'+ stockname + '</b>' + ':\n实时：' + stockcurrent + '  昨收：' + stockyestoday + ' 今开：' + stocktoday + ' 涨跌：' + stockupdown + ' 涨幅：' + stockupdownpercent  + '%' + '\n'
             messageall += messagetmp
 
 
         # reply response to user
         LoggingManager.debug("Sending response to user: %s" % str(update.effective_user.id), "TelegramMessageParser")
-        await update.message.reply_text(messageall + ' ') #旧版回复消息
+        #await update.message.reply_text(messageall + ' ') #旧版回复消息
+
+                #新版定时删除消息
+        sent = await context.bot.send_message(
+                chat_id = update.effective_chat.id,
+                text = messageall + ' ',
+                #text = f'<pre>{table}</pre>',
+                parse_mode='HTML'
+            )
+        await asyncio.sleep(300)
+        await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  sent.message_id)
+        await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  update.message.message_id)
 
 
     # voice message in private chat, speech to text with Azure Speech Studio and process with Azure OpenAI
