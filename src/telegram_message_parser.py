@@ -241,8 +241,20 @@ class TelegramMessageParser:
             stocktoday = tmplist[5]
             stockupdown = str(round(float(tmplist[3]) - float(tmplist[4]),2))
             stockupdownpercent = str(round(((float(tmplist[3]) - float(tmplist[4])) / (float(tmplist[4]) + 0.000000000001)) * 100.00,2))
+            symbolpercent = ''
+            symbolfloat = float(stockupdownpercent) 
+            if symbolfloat >= 0:
+                symbolint = int(symbolfloat + 1.0)
+                for i in range(symbolint):
+                    symbolpercent += '\U00002764'
+            else:
+                symbolint = int(abs(symbolfloat) + 1.0)
+                for i in range(symbolint):
+                    symbolpercent += '\U0001F49A'
+
             #table.add_row([stockname,stockcurrent,stockyestoday,stocktoday,stockupdown,stockupdownpercent+'%'])
-            messagetmp = '<b>'+ stockname + '</b>' + ':\n实时：' + stockcurrent + '  昨收：' + stockyestoday + ' 今开：' + stocktoday + ' 涨跌：' + stockupdown + ' 涨幅：' + stockupdownpercent  + '%' + '\n'
+            messagetmp = '<b>'+ stockname + '</b>:' + symbolpercent + '\n'
+            messagetmp += '实时：' + stockcurrent + '  昨收：' + stockyestoday + ' 今开：' + stocktoday + ' 涨跌：' + stockupdown + ' 涨幅：' + stockupdownpercent  + '%' + '\n'
             messageall += messagetmp
 
 
