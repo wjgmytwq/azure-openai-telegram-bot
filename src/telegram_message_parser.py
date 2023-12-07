@@ -110,9 +110,6 @@ class TelegramMessageParser:
         # unknown command handler
         self.bot.add_handler(MessageHandler(filters.COMMAND, self.unknown))
 
-    async def handle_message(update, context):
-        print(update.message.text)
-
     # normal chat messages
     async def chat_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         LoggingManager.info("Get a chat message from user: %s" % str(update.effective_user.id), "TelegramMessageParser")
@@ -158,13 +155,13 @@ class TelegramMessageParser:
         # reply response to user
         #await update.message.reply_text(self.escape_str(response), parse_mode='MarkdownV2')
         LoggingManager.debug("Sending response to user: %s" % str(update.effective_user.id), "TelegramMessageParser")
-        #await update.message.reply_text(response) #旧版回复消息
+        await update.message.reply_text(response) #旧版回复消息
 
         #最新版定时删除消息
-        sent = await context.bot.send_message(
-                chat_id = update.effective_chat.id,
-                text = response
-            )
+        #sent = await context.bot.send_message(
+        #        chat_id = update.effective_chat.id,
+        #        text = response
+        #    )
         #await asyncio.sleep(10)
         #await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  sent.message_id)#删除答复
         #await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  update.message.message_id)#删除原始信息
