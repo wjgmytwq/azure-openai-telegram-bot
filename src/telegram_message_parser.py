@@ -25,6 +25,7 @@ import json, os
 import logging
 import subprocess
 import requests
+import re
 #from threading import Timer
 import time
 import asyncio
@@ -102,23 +103,34 @@ class TelegramMessageParser:
         # normal message handlers
         # self.bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), self.chat_text))
         # normal chat messages handlers in private chat
-        self.bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), self.chat_text))
-        self.bot.add_handler(CommandHandler("chat", self.chat_text_command))
+        self.bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), self.chat_text))#监控群组消息，要求给管理员权限+botfather设置权限
+        self.bot.add_handler(CommandHandler("chat", self.chat_text_command))#AI聊天
         self.bot.add_handler(CommandHandler("stock", self.stock_text_command))#新增股票查询接口
-
+        
         # unknown command handler
         self.bot.add_handler(MessageHandler(filters.COMMAND, self.unknown))
 
+    async def handle_message(update, context):
+        print(update.message.text)
 
     # normal chat messages
     async def chat_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         LoggingManager.info("Get a chat message from user: %s" % str(update.effective_user.id), "TelegramMessageParser")
         # if group chat
-        if update.effective_chat.type == "group" or update.effective_chat.type == "supergroup":
+        if update.effective_chat.type != "group" and update.effective_chat.type != "supergroup":
             return
 
         # get message
         message = update.effective_message.text
+
+        # 如果找到中文字符,或者文字长度小于10，则返回
+        if (len(message) < 10):
+            return
+
+        if re.search("[\u4e00-\u9fff]", message):
+            return
+
+        #没有中文则进入翻译
 
         # check if user is allowed
         allowed, _ = self.access_manager.check_user_allowed(str(update.effective_user.id))
@@ -137,12 +149,14 @@ class TelegramMessageParser:
 
         # send message to azure openai
         response = self.message_manager.get_response(
-            str(update.effective_chat.id), 
-            str(update.effective_user.id), 
-            message
+            str(update.effective_chat.id),
+            str(update.effective_user.id),
+            '将下面的文字翻译成中文：'+message
             )
+
+
         # reply response to user
-        # await update.message.reply_text(self.escape_str(response), parse_mode='MarkdownV2')
+        #await update.message.reply_text(self.escape_str(response), parse_mode='MarkdownV2')
         LoggingManager.debug("Sending response to user: %s" % str(update.effective_user.id), "TelegramMessageParser")
         #await update.message.reply_text(response) #旧版回复消息
 
@@ -151,9 +165,9 @@ class TelegramMessageParser:
                 chat_id = update.effective_chat.id,
                 text = response
             )
-        await asyncio.sleep(300)
-        await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  sent.message_id)
-        await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  update.message.message_id)
+        #await asyncio.sleep(10)
+        #await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  sent.message_id)#删除答复
+        #await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  update.message.message_id)#删除原始信息
 
     # command chat messages
     async def chat_text_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -269,7 +283,7 @@ class TelegramMessageParser:
                 #text = f'<pre>{table}</pre>',
                 parse_mode='HTML'
             )
-        await asyncio.sleep(300)
+        await asyncio.sleep(20)
         await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  sent.message_id)
         await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  update.message.message_id)
 
@@ -529,10 +543,20 @@ class TelegramMessageParser:
             return
         self.message_manager.clear_context(str(update.effective_chat.id))
         LoggingManager.debug("Context cleared for user: %s" % str(update.effective_user.id), "TelegramMessageParser")
-        await context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text="Context cleared."
-        )
+        #await context.bot.send_message(
+        #    chat_id=update.effective_chat.id,
+        #    text="Context cleared."
+        #)
+
+                #新版定时删除消息
+        sent = await context.bot.send_message(
+                chat_id = update.effective_chat.id,
+                text = "Context cleared."
+            )
+        await asyncio.sleep(20)
+        await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  sent.message_id)
+        await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  update.message.message_id)
+
 
     # get user id command
     async def get_user_id(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
