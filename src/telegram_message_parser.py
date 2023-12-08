@@ -275,11 +275,20 @@ class TelegramMessageParser:
         # reply response to user
         LoggingManager.debug("Sending response to user: %s" % str(update.effective_user.id), "TelegramMessageParser")
         #await update.message.reply_text(messageall + ' ') #旧版回复消息
+        
+        # 创建两个按钮，都链接到Google
+        keyboard = [
+            [InlineKeyboardButton("东方财富网", url="http://quote.eastmoney.com/center/")],
+            [InlineKeyboardButton("新浪股票", url="https://vip.stock.finance.sina.com.cn/mkt/")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
 
+        
                 #新版定时删除消息
         sent = await context.bot.send_message(
                 chat_id = update.effective_chat.id,
                 text = messageall + ' ',
+                reply_markup=reply_markup,
                 #text = f'<pre>{table}</pre>',
                 parse_mode='HTML'
             )
