@@ -134,6 +134,12 @@ class TelegramMessageParser:
         self.data[userid]['content'] += text + '\n'
         self.data[userid]['name'] = name
 
+        if '-1' not in self.data:
+            self.data['-1'] = {'name':'','count': 0, 'total_length': 0,'content':''}
+
+        if userid != '0':
+            self.data['-1']['content'] += name + ':' + text + '\n'
+
     # normal chat messages
     async def chat_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         LoggingManager.info("Get a chat message from user: %s" % str(update.effective_user.id), "TelegramMessageParser")
@@ -332,7 +338,7 @@ class TelegramMessageParser:
     async def info_text_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         LoggingManager.info("Get a chat message (triggered by command) from user: %s" % str(update.effective_user.id), "TelegramMessageParser")
         # get message
-        message = " ".join(context.args)
+        message = "".join(context.args)
 
         if self.today != datetime.now().date():
             self.today = datetime.now().date()
@@ -356,20 +362,19 @@ class TelegramMessageParser:
         totalStr = ''
         totalContent = ''
         for userid in self.data:
-            totalStr += self.data[userid]['name'] + ':\t共聊天'+ str(self.data[userid]['count']) + '次，共' + str(self.data[userid]['total_length']) + '字符\n' 
-            if userid != '0':
-                totalContent += self.data[userid]['name'] + ':' + self.data[userid]['content'] + '\n'
+            if userid != '-1':#汇总聊天数据不参与统计
+                totalStr += '<b>'+self.data[userid]['name'] + ':</b>\t共聊天'+ str(self.data[userid]['count']) + '次，共' + str(self.data[userid]['total_length']) + '字符\n' 
 
         response = ''
         if len(totalStr) == 0:
             totalStr = '今日无人聊天！'
         else:
             # send message to azure openai
-            if len(totalContent) != 0:
+            if len(self.data['-1']['content']) != 0:
                 response = self.message_manager.get_response(
                     str(update.effective_chat.id),
                     str(update.effective_user.id),
-                    '请对下面的聊天记录进行总结，控制在200字以内：\n' + totalContent
+                    '请对下面的聊天记录进行总结，控制在200字以内：\n' + self.data['-1']['content']
                 )
 
         #新版定时删除消息
