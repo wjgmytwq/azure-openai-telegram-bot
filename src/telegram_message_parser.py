@@ -120,6 +120,10 @@ class TelegramMessageParser:
         self.bot.add_handler(MessageHandler(filters.COMMAND, self.unknown))
 
     async def add_text(self,userid, name, text):
+        if self.today != datetime.now().date():
+            self.today = datetime.now().date()
+            self.data = {}
+
         # 如果userid是第一次出现，初始化记录
         if userid not in self.data:
             self.data[userid] = {'name':'','count': 0, 'total_length': 0,'content':''}
@@ -202,6 +206,8 @@ class TelegramMessageParser:
         LoggingManager.info("Get a chat message (triggered by command) from user: %s" % str(update.effective_user.id), "TelegramMessageParser")
         # get message
         message = " ".join(context.args)
+
+        await self.add_text('0','ChatGPT调用',message)
 
         # sending typing action
         await context.bot.send_chat_action(
@@ -351,18 +357,20 @@ class TelegramMessageParser:
         totalContent = ''
         for userid in self.data:
             totalStr += self.data[userid]['name'] + ':\t共聊天'+ str(self.data[userid]['count']) + '次，共' + str(self.data[userid]['total_length']) + '字符\n' 
-            totalContent += self.data[userid]['name'] + ':' + self.data[userid]['content'] + '\n'
+            if userid != '0':
+                totalContent += self.data[userid]['name'] + ':' + self.data[userid]['content'] + '\n'
 
         response = ''
         if len(totalStr) == 0:
             totalStr = '今日无人聊天！'
         else:
             # send message to azure openai
-            response = self.message_manager.get_response(
-                str(update.effective_chat.id),
-                str(update.effective_user.id),
-                '请对下面的聊天记录进行总结，控制在200字以内：\n' + totalContent
-            )
+            if len(totalContent) != 0:
+                response = self.message_manager.get_response(
+                    str(update.effective_chat.id),
+                    str(update.effective_user.id),
+                    '请对下面的聊天记录进行总结，控制在200字以内：\n' + totalContent
+                )
 
         #新版定时删除消息
         sent = await context.bot.send_message(
