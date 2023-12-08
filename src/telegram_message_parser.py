@@ -120,8 +120,11 @@ class TelegramMessageParser:
         # get message
         message = update.effective_message.text
 
+        #清理掉一些英文标点符号和数字、空白字符和中文标点符号
+        regex_pattern = f"[{re.escape(string.punctuation)}\s\d\u3000-\u303F\uFF00-\uFFEF]"
+
         # 如果找到中文字符,或者文字长度小于10，则返回
-        if (len(message) < 10):
+        if (len(re.sub(regex_pattern, '', message)) <= 15):
             return
 
         if re.search("[\u4e00-\u9fff]", message):
