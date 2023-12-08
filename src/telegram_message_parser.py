@@ -26,11 +26,13 @@ import logging
 import subprocess
 import requests
 import re
+import string
 #from threading import Timer
 import time
 import asyncio
 import threading
 import datetime
+from datetime import datetime
 from apscheduler.schedulers.blocking import BlockingScheduler
 from uuid import uuid4
 from message_manager import MessageManager
@@ -75,6 +77,11 @@ class TelegramMessageParser:
         #]
         #self.group_commands = [BotCommand(command='chat', description='对话AI助理')] + self.commands
 
+        # 使用字典来存储每个name的text数量和次数
+        self.data = {}
+        #记录当天时间
+        self.today = ''
+
 
     def run_polling(self):
         LoggingManager.info("Starting polling, the bot is now running...", "TelegramMessageParser")
@@ -106,9 +113,22 @@ class TelegramMessageParser:
         self.bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), self.chat_text))#监控群组消息，要求给管理员权限+botfather设置权限
         self.bot.add_handler(CommandHandler("chat", self.chat_text_command))#AI聊天
         self.bot.add_handler(CommandHandler("stock", self.stock_text_command))#新增股票查询接口
+        self.bot.add_handler(CommandHandler("info", self.info_text_command))#新增群友聊天信息
+
         
         # unknown command handler
         self.bot.add_handler(MessageHandler(filters.COMMAND, self.unknown))
+
+    async def add_text(self,userid, name, text):
+        # 如果userid是第一次出现，初始化记录
+        if userid not in self.data:
+            self.data[userid] = {'name':'','count': 0, 'total_length': 0,'content':''}
+
+        # 更新次数和总长度
+        self.data[userid]['count'] += 1
+        self.data[userid]['total_length'] += len(text)
+        self.data[userid]['content'] += text + '\n'
+        self.data[userid]['name'] = name
 
     # normal chat messages
     async def chat_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -119,7 +139,15 @@ class TelegramMessageParser:
 
         # get message
         message = update.effective_message.text
+        user = update.message.from_user
 
+        # 获取用户的名字
+        # 注意：不是所有用户都有“username”，因此可能需要使用“first_name”或“last_name”
+        user_name = f"{user.first_name} {user.last_name}"
+
+        await self.add_text(str(update.effective_user.id),user_name,message)
+
+        
         #清理掉一些英文标点符号和数字、空白字符和中文标点符号
         regex_pattern = f"[{re.escape(string.punctuation)}\s\d\u3000-\u303F\uFF00-\uFFEF]"
 
@@ -161,7 +189,7 @@ class TelegramMessageParser:
         await update.message.reply_text(response) #旧版回复消息
 
         #最新版定时删除消息
-        #sent = await context.bot.send_message(
+        #sent = await context.bot.send_(
         #        chat_id = update.effective_chat.id,
         #        text = response
         #    )
@@ -275,20 +303,18 @@ class TelegramMessageParser:
         # reply response to user
         LoggingManager.debug("Sending response to user: %s" % str(update.effective_user.id), "TelegramMessageParser")
         #await update.message.reply_text(messageall + ' ') #旧版回复消息
-        
+
         # 创建两个按钮，都链接到Google
         keyboard = [
             [InlineKeyboardButton("东方财富网", url="http://quote.eastmoney.com/center/")],
             [InlineKeyboardButton("新浪股票", url="https://vip.stock.finance.sina.com.cn/mkt/")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-
-        
-                #新版定时删除消息
+        #新版定时删除消息
         sent = await context.bot.send_message(
                 chat_id = update.effective_chat.id,
                 text = messageall + ' ',
-                reply_markup=reply_markup,
+                #reply_markup=reply_markup,
                 #text = f'<pre>{table}</pre>',
                 parse_mode='HTML'
             )
@@ -296,6 +322,58 @@ class TelegramMessageParser:
         await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  sent.message_id)
         await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  update.message.message_id)
 
+    # command info messages
+    async def info_text_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        LoggingManager.info("Get a chat message (triggered by command) from user: %s" % str(update.effective_user.id), "TelegramMessageParser")
+        # get message
+        message = " ".join(context.args)
+
+        if self.today != datetime.now().date():
+            self.today = datetime.now().date()
+            self.data = {}
+
+        # sending typing action
+        await context.bot.send_chat_action(
+            chat_id=update.effective_chat.id,
+            action="typing"
+        )
+
+        # check if user is allowed
+        allowed, _ = self.access_manager.check_user_allowed(str(update.effective_user.id))
+        if not allowed:
+            await context.bot.send_message(
+                chat_id = update.effective_chat.id,
+                text = "Sorry, you are not allowed to use this bot."
+            )
+            return
+        
+        totalStr = ''
+        totalContent = ''
+        for userid in self.data:
+            totalStr += self.data[userid]['name'] + ':\t共聊天'+ str(self.data[userid]['count']) + '次，共' + str(self.data[userid]['total_length']) + '字符\n' 
+            totalContent += self.data[userid]['name'] + ':' + self.data[userid]['content'] + '\n'
+
+        response = ''
+        if len(totalStr) == 0:
+            totalStr = '今日无人聊天！'
+        else:
+            # send message to azure openai
+            response = self.message_manager.get_response(
+                str(update.effective_chat.id),
+                str(update.effective_user.id),
+                '请对下面的聊天记录进行总结，控制在200字以内：\n' + totalContent
+            )
+
+        #新版定时删除消息
+        sent = await context.bot.send_message(
+                chat_id = update.effective_chat.id,
+                text = totalStr + '\n' + response,
+                #text = f'<pre>{table}</pre>',
+                parse_mode='HTML'
+            )
+        #await asyncio.sleep(300)
+        #await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  sent.message_id)
+        #await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  update.message.message_id)
 
     # voice message in private chat, speech to text with Azure Speech Studio and process with Azure OpenAI
     async def chat_voice(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
