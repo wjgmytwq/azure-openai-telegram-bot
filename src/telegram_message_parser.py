@@ -114,6 +114,7 @@ class TelegramMessageParser:
         self.bot.add_handler(CommandHandler("chat", self.chat_text_command))#AI聊天
         self.bot.add_handler(CommandHandler("stock", self.stock_text_command))#新增股票查询接口
         self.bot.add_handler(CommandHandler("info", self.info_text_command))#新增群友聊天信息
+        self.bot.add_handler(CommandHandler("analy", self.analy_text_command))#新增群友聊天分析
 
         
         # unknown command handler
@@ -365,28 +366,67 @@ class TelegramMessageParser:
             if userid != '-1':#汇总聊天数据不参与统计
                 totalStr += '<b>'+self.data[userid]['name'] + ':</b>\t共聊天'+ str(self.data[userid]['count']) + '次，共' + str(self.data[userid]['total_length']) + '字符\n' 
 
-        response = ''
         if len(totalStr) == 0:
             totalStr = '今日无人聊天！'
-        else:
-            # send message to azure openai
-            if len(self.data['-1']['content']) != 0:
-                response = self.message_manager.get_response(
-                    str(update.effective_chat.id),
-                    str(update.effective_user.id),
-                    '请对下面的聊天记录进行总结，控制在200字以内：\n' + self.data['-1']['content']
-                )
 
         #新版定时删除消息
         sent = await context.bot.send_message(
                 chat_id = update.effective_chat.id,
-                text = totalStr + '\n' + response,
+                text = totalStr,
                 #text = f'<pre>{table}</pre>',
                 parse_mode='HTML'
             )
-        #await asyncio.sleep(300)
-        #await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  sent.message_id)
-        #await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  update.message.message_id)
+        await asyncio.sleep(300)
+        await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  sent.message_id)
+        await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  update.message.message_id)
+
+    # command analy messages
+    async def analy_text_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        LoggingManager.info("Get a chat message (triggered by command) from user: %s" % str(update.effective_user.id), "TelegramMessageParser")
+        # get message
+        message = "".join(context.args)
+
+        if self.today != datetime.now().date():
+            self.today = datetime.now().date()
+            self.data = {}
+
+        # sending typing action
+        await context.bot.send_chat_action(
+            chat_id=update.effective_chat.id,
+            action="typing"
+        )
+
+        # check if user is allowed
+        allowed, _ = self.access_manager.check_user_allowed(str(update.effective_user.id))
+        if not allowed:
+            await context.bot.send_message(
+                chat_id = update.effective_chat.id,
+                text = "Sorry, you are not allowed to use this bot."
+            )
+            return
+
+        response = ''
+        if len(self.data) != 0 and len(self.data['-1']['content']) != 0:
+            response = self.message_manager.get_response(
+                str(update.effective_chat.id),
+                str(update.effective_user.id),
+                '请对下面的聊天记录进行总结：\n' + self.data['-1']['content']
+            )
+        else:
+            response = '今日无人聊天！'
+
+        #新版定时删除消息
+        sent = await context.bot.send_message(
+                chat_id = update.effective_chat.id,
+                text = response,
+                #text = f'<pre>{table}</pre>',
+                parse_mode='HTML'
+            )
+
+        await asyncio.sleep(300)
+        await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  sent.message_id)
+        await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  update.message.message_id)
+
 
     # voice message in private chat, speech to text with Azure Speech Studio and process with Azure OpenAI
     async def chat_voice(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
