@@ -27,6 +27,7 @@ import subprocess
 import requests
 import re
 import string
+import telegram
 #from threading import Timer
 import time
 import asyncio
@@ -120,31 +121,35 @@ class TelegramMessageParser:
         # unknown command handler
         self.bot.add_handler(MessageHandler(filters.COMMAND, self.unknown))
 
-    async def add_text(self,userid, name, text):
+    async def add_text(self,chatid,userid, name, text):
         if self.today != datetime.now().date():
             self.today = datetime.now().date()
             self.data = {}
 
         # 如果userid是第一次出现，初始化记录
-        if userid not in self.data:
-            self.data[userid] = {'name':'','count': 0, 'total_length': 0,'content':''}
+        if chatid not in self.data: 
+            self.data[chatid] = {}
+
+        if userid not in self.data[chatid]:
+            self.data[chatid][userid] = {'name':'','count': 0, 'total_length': 0,'content':''}
 
         # 更新次数和总长度
-        self.data[userid]['count'] += 1
-        self.data[userid]['total_length'] += len(text)
-        #self.data[userid]['content'] += text + '\n'
-        self.data[userid]['name'] = name
+        self.data[chatid][userid]['count'] += 1
+        self.data[chatid][userid]['total_length'] += len(text)
+        #self.data[chatid][userid]['content'] += text + '\n'
+        self.data[chatid][userid]['name'] = name
 
-        if '-1' not in self.data:
-            self.data['-1'] = {'name':'','count': 0, 'total_length': 0,'content':''}
+        if '-1' not in self.data[chatid]:
+            self.data[chatid]['-1'] = {'name':'','count': 0, 'total_length': 0,'content':''}
 
-        #if userid != '0':
-            #self.data['-1']['content'] += name + ':' + text + '\n'
+        #if userid != '0' and userid != '1' and userid != '2':
+            #self.data[chatid]['-1']['content'] += name + ':' + text + '\n'
 
 
     # normal chat messages
     async def chat_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         LoggingManager.info("Get a chat message from user: %s" % str(update.effective_user.id), "TelegramMessageParser")
+
         # if group chat
         if update.effective_chat.type != "group" and update.effective_chat.type != "supergroup":
             return
@@ -157,7 +162,7 @@ class TelegramMessageParser:
         # 注意：不是所有用户都有“username”，因此可能需要使用“first_name”或“last_name”
         user_name = f"{user.first_name} {user.last_name}"
 
-        await self.add_text(str(update.effective_user.id),user_name,message)
+        await self.add_text(str(update.effective_chat.id),str(update.effective_user.id),user_name,message)
 
         
         #清理掉一些英文标点符号和数字、空白字符和中文标点符号
@@ -216,7 +221,7 @@ class TelegramMessageParser:
         # get message
         message = " ".join(context.args)
 
-        await self.add_text('0','ChatGPT调用',message)
+        await self.add_text(str(update.effective_chat.id),'0','ChatGPT调用',message)
 
         # sending typing action
         await context.bot.send_chat_action(
@@ -257,7 +262,7 @@ class TelegramMessageParser:
         LoggingManager.info("Get a chat message (triggered by command) from user: %s" % str(update.effective_user.id), "TelegramMessageParser")
         # get message
         message = " ".join(context.args)
-        await self.add_text('1','股票接口调用',message)
+        await self.add_text(str(update.effective_chat.id),'1','股票接口调用',message)
 
         # sending typing action
         await context.bot.send_chat_action(
@@ -365,14 +370,23 @@ class TelegramMessageParser:
         
         totalStr = ''
         totalContent = ''
-        for userid in self.data:
-            if userid != '-1':#汇总聊天数据不参与统计
-                totalStr += '<b>['+self.data[userid]['name'] + ']:</b>\t共'+ str(self.data[userid]['count']) + '次，共' + str(self.data[userid]['total_length']) + '字符\n' 
+        totalCount = 0
+        totalChar = 0
+        chatid = str(update.effective_chat.id)
 
-        if len(totalStr) == 0:
-            totalStr = '今日无人聊天！'
+        if self.data != 0 and chatid in self.data:
+            for userid in self.data[chatid]:
+                if userid != '-1':#汇总聊天数据不参与统计
+                    totalCount += int(self.data[chatid][userid]['count'])
+                    totalChar += int(self.data[chatid][userid]['total_length'])
+                    totalStr += '<b>['+self.data[chatid][userid]['name'] + ']:</b>\t共'+ str(self.data[chatid][userid]['count']) + '次，共' + str(self.data[chatid][userid]['total_length']) + '字符\n' 
+
+            if len(totalStr) == 0:
+                totalStr = '今日无人聊天！'
+            else:
+                totalStr = '<b>今日聊天数据：</b>共'+str(totalCount)+'次，共'+str(totalChar)+'字符\n' + totalStr
         else:
-            totalStr = '<b>今日聊天数据：</b>\n' + totalStr
+            totalStr = '今日无人聊天！'
 
         #新版定时删除消息
         sent = await context.bot.send_message(
@@ -381,7 +395,7 @@ class TelegramMessageParser:
                 #text = f'<pre>{table}</pre>',
                 parse_mode='HTML'
             )
-        await asyncio.sleep(10)
+        await asyncio.sleep(30)
         await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  sent.message_id)
         await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  update.message.message_id)
 
@@ -411,12 +425,14 @@ class TelegramMessageParser:
             return
 
         response = ''
-        if len(self.data) != 0 and len(self.data['-1']['content']) != 0:
-            response = self.message_manager.get_response(
-                str(update.effective_chat.id),
-                str(update.effective_user.id),
-                '请对下面的聊天记录进行总结,不要输出跟聊天内容无关的文字：\n' + self.data['-1']['content']
-            )
+        chatid = update.effective_chat.id
+        if len(self.data) != 0 and self.data[chatid] != 0 and len(self.data[chatid]['-1']['content']) != 0:
+            #response = self.message_manager.get_response(
+            #    str(update.effective_chat.id),
+            #    str(update.effective_user.id),
+            #    '请对下面的聊天记录进行总结,不要输出跟聊天内容无关的文字：\n' + self.data['-1']['content']
+            #)
+            response = self.data[chatid]['-1']['content']
         else:
             response = '今日无人聊天！'
 
@@ -428,7 +444,7 @@ class TelegramMessageParser:
                 parse_mode='HTML'
             )
 
-        await asyncio.sleep(300)
+        await asyncio.sleep(30)
         await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  sent.message_id)
         await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  update.message.message_id)
 
