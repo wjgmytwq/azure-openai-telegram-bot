@@ -218,7 +218,7 @@ class TelegramMessageParser:
             '将下面的文字翻译成中文：'+message
             )
 
-        await self.add_text(update.effective_chat.id,'2','AI自动翻译',message)
+        await self.add_text(str(update.effective_chat.id),'2','AI自动翻译',message)
 
         # reply response to user
         #await update.message.reply_text(self.escape_str(response), parse_mode='MarkdownV2')
