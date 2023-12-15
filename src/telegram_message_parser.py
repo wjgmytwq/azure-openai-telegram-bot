@@ -173,13 +173,23 @@ class TelegramMessageParser:
     # normal chat messages
     async def chat_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         LoggingManager.info("Get a chat message from user: %s" % str(update.effective_user.id), "TelegramMessageParser")
-
+        
         # if group chat
         if update.effective_chat.type != "group" and update.effective_chat.type != "supergroup":
             return
 
         # get message
-        message = update.effective_message.text
+        message = ''
+
+        if update.message.photo and update.message.caption:
+            # 获取图片说明文字
+            message = update.message.caption
+        else:
+            message = update.effective_message.text
+        
+        if len(message) == 0:
+            return
+
         user = update.message.from_user
 
 
@@ -571,6 +581,7 @@ class TelegramMessageParser:
 
     # image_generation command, aka DALLE
     async def image_generation(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+
         LoggingManager.info("Get an image generation command from user: %s" % str(update.effective_user.id), "TelegramMessageParser")
         # remove dalle command from message
         # message = update.effective_message.text.replace("/dalle", "")
@@ -680,6 +691,10 @@ class TelegramMessageParser:
     # file and photo messages
 
     async def chat_file(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        #将图片和文件交给chat_text处理
+        await self.chat_text(update,context)
+        return
+
         # get message
         message = update.effective_message.text
         # group chat without @username
