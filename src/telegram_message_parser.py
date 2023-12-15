@@ -157,10 +157,10 @@ class TelegramMessageParser:
         # 统计中文字符数量
         chinese_chars = len(re.findall("[\u4e00-\u9fff]", text))
         # 统计英文单词数量
-        all_words = len(text)
+        all_words = len(re.sub(regex_url,'',text))#去掉网址类的文字，否则干扰太多
 
         # 使用langdetect作为初步判断
-        detected_language = detect(text)
+        detected_language = detect(re.sub(regex_url,'',text))
         
         # 如果检测是非中文的话,但是中文比例高于20%
 
