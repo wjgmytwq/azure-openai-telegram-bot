@@ -26,6 +26,7 @@ import logging
 import subprocess
 import requests
 import re
+from langdetect import detect
 import string
 import telegram
 #from threading import Timer
@@ -145,6 +146,29 @@ class TelegramMessageParser:
         #if userid != '0' and userid != '1' and userid != '2':
             #self.data[chatid]['-1']['content'] += name + ':' + text + '\n'
 
+    def detect_language(self,text):
+        #如果字符数太少，也不处理
+        #清理掉一些英文标点符号和数字、空白字符和中文标点符号
+        regex_pattern = f"[{re.escape(string.punctuation)}\s\d\u3000-\u303F\uFF00-\uFFEF]"
+
+        if (len(re.sub(regex_pattern, '', text)) <= 10):
+            return 'zh-cn'
+
+        # 统计中文字符数量
+        chinese_chars = len(re.findall("[\u4e00-\u9fff]", text))
+        # 统计英文单词数量
+        all_words = len(text)
+
+        # 使用langdetect作为初步判断
+        detected_language = detect(text)
+        
+        # 如果检测是非中文的话,但是中文比例高于20%
+
+        if detected_language != 'zh-cn' and detected_language != 'zh-tw' and detected_language != 'ja':
+            if chinese_chars != 0 and (all_words / chinese_chars) < 5:
+                return 'zh-cn'
+            
+        return detected_language
 
     # normal chat messages
     async def chat_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -158,21 +182,16 @@ class TelegramMessageParser:
         message = update.effective_message.text
         user = update.message.from_user
 
+
         # 获取用户的名字
         # 注意：不是所有用户都有“username”，因此可能需要使用“first_name”或“last_name”
         user_name = f"{user.first_name} {user.last_name}"
 
         await self.add_text(str(update.effective_chat.id),str(update.effective_user.id),user_name,message)
 
-        
-        #清理掉一些英文标点符号和数字、空白字符和中文标点符号
-        regex_pattern = f"[{re.escape(string.punctuation)}\s\d\u3000-\u303F\uFF00-\uFFEF]"
 
-        # 如果找到中文字符,或者文字长度小于10，则返回
-        if (len(re.sub(regex_pattern, '', message)) <= 15):
-            return
-
-        if re.search("[\u4e00-\u9fff]", message):
+        languageType = self.detect_language(message)#判断是否是中文，如果是中文就不翻译
+        if(languageType == 'zh-cn' or languageType == 'zh-tw'):
             return
 
         #没有中文则进入翻译
@@ -199,7 +218,7 @@ class TelegramMessageParser:
             '将下面的文字翻译成中文：'+message
             )
 
-        await self.add_text('2','AI自动翻译',message)
+        await self.add_text(update.effective_chat.id,'2','AI自动翻译',message)
 
         # reply response to user
         #await update.message.reply_text(self.escape_str(response), parse_mode='MarkdownV2')
