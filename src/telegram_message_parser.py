@@ -150,8 +150,8 @@ class TelegramMessageParser:
         #如果字符数太少，也不处理
         #清理掉一些英文标点符号和数字、空白字符和中文标点符号
         regex_pattern = f"[{re.escape(string.punctuation)}\s\d\u3000-\u303F\uFF00-\uFFEF]"
-
-        if (len(re.sub(regex_pattern, '', text)) <= 10):
+        regex_url = r'https?://\S+|www\.\S+'
+        if (len(re.sub(regex_pattern, '', re.sub(regex_url,'',text))) <= 10):
             return 'zh-cn'
 
         # 统计中文字符数量
@@ -186,8 +186,9 @@ class TelegramMessageParser:
             message = update.message.caption
         else:
             message = update.effective_message.text
-        
-        if len(message) == 0:
+       
+
+        if message == None or len(message) == 0:
             return
 
         user = update.message.from_user
