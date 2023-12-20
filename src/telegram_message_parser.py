@@ -173,19 +173,19 @@ class TelegramMessageParser:
     # normal chat messages
     async def chat_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         LoggingManager.info("Get a chat message from user: %s" % str(update.effective_user.id), "TelegramMessageParser")
-        
         # if group chat
-        if update.effective_chat.type != "group" and update.effective_chat.type != "supergroup":
+        if update.effective_chat.type != "group" and update.effective_chat.type != "supergroup" and update.effective_chat.type != "private":
             return
 
         # get message
         message = ''
-
-        if update.message.photo and update.message.caption:
-            # 获取图片说明文字
-            message = update.message.caption
-        else:
-            message = update.effective_message.text
+        if(update.message):
+            if update.message.text:
+                message = update.effective_message.text
+            else:
+                if(update.message.caption):
+                    # 获取图片说明文字
+                    message = update.message.caption
        
 
         if message == None or len(message) == 0:
