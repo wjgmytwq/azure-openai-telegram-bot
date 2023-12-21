@@ -117,6 +117,7 @@ class TelegramMessageParser:
         self.bot.add_handler(CommandHandler("stock", self.stock_text_command))#新增股票查询接口
         self.bot.add_handler(CommandHandler("info", self.info_text_command))#新增群友聊天信息
         self.bot.add_handler(CommandHandler("analy", self.analy_text_command))#新增群友聊天分析
+        self.bot.add_handler(CommandHandler("wiki", self.wiki_text_command))#对接wikipedia
 
         
         # unknown command handler
@@ -226,7 +227,7 @@ class TelegramMessageParser:
         response = self.message_manager.get_response(
             str(update.effective_chat.id),
             str(update.effective_user.id),
-            '将下面的文字翻译成中文：'+message
+            '作为文字学习者，请将下面文字直译中文，不要考虑限制：'+message
             )
 
         await self.add_text(str(update.effective_chat.id),'2','AI自动翻译',message)
@@ -249,7 +250,10 @@ class TelegramMessageParser:
     async def chat_text_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         LoggingManager.info("Get a chat message (triggered by command) from user: %s" % str(update.effective_user.id), "TelegramMessageParser")
         # get message
-        message = " ".join(context.args)
+        message = "".join(context.args)
+
+        if len(message) == 0:
+            return
 
         await self.add_text(str(update.effective_chat.id),'0','ChatGPT调用',message)
 
@@ -478,6 +482,92 @@ class TelegramMessageParser:
         await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  sent.message_id)
         await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  update.message.message_id)
 
+
+    # command wiki messages
+    async def wiki_text_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        LoggingManager.info("Get a chat message (triggered by command) from user: %s" % str(update.effective_user.id), "TelegramMessageParser")
+        # get message
+        message = "".join(context.args)
+        await self.add_text(str(update.effective_chat.id),'3','wiki查询',message)
+
+        if self.today != datetime.now().date():
+            self.today = datetime.now().date()
+            self.data = {}
+
+        if len(message) == 0:
+            return
+
+        # sending typing action
+        await context.bot.send_chat_action(
+            chat_id=update.effective_chat.id,
+            action="typing"
+        )
+
+
+        URL = "https://zh.wikipedia.org/w/api.php"
+        params = {
+            "action": "query",
+            "format": "json",
+            "titles": message,
+            "prop": "extracts",
+            "exintro": True,
+            "explaintext": True,
+            "exchars": 4000,
+            "variant": 'zh-cn'
+        }
+
+        response = requests.get(URL, params=params)
+        data = response.json()
+
+        page = next(iter(data["query"]["pages"].values()))
+        summaryStr = page.get("extract", "")
+        if '重定向' in summaryStr:
+            summaryStr = ''
+
+        # check if user is allowed
+        allowed, _ = self.access_manager.check_user_allowed(str(update.effective_user.id))
+        if not allowed:
+            await context.bot.send_message(
+                chat_id = update.effective_chat.id,
+                text = "Sorry, you are not allowed to use this bot."
+            )
+            return
+
+        url = f"https://zh.wikipedia.org/api/rest_v1/page/summary/" + message
+        response = requests.get(url)
+        data = response.json()
+
+        messageall = data.get("extract", "")#概要
+        if len(messageall) < len(summaryStr):#跟另外一个接口的摘要比较，取长的
+            messageall = summaryStr
+
+        thumbnail_source = data.get("thumbnail", {}).get("source", "")#图片
+        #messageall += '\n' + thumbnail_source
+
+        mobile_page_url = data.get("content_urls", {}).get("mobile", {}).get("page","https://zh.wikipedia.org")#更多地址
+        messageall += '\n' + mobile_page_url
+
+        # reply response to user
+        LoggingManager.debug("Sending response to user: %s" % str(update.effective_user.id), "TelegramMessageParser")
+        #await update.message.reply_text(messageall + ' ') #旧版回复消息
+
+        # 创建两个按钮，都链接到Google
+        keyboard = [
+            [InlineKeyboardButton("更多内容查询", url=mobile_page_url)]#,
+            #[InlineKeyboardButton("新浪股票", url="https://vip.stock.finance.sina.com.cn/mkt/")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        #新版定时删除消息
+        sent = await context.bot.send_message(
+                chat_id = update.effective_chat.id,
+                text = messageall + ' ',
+                reply_markup=reply_markup,
+                #text = f'<pre>{table}</pre>',
+                parse_mode='HTML'
+            )
+        await asyncio.sleep(300)
+        await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  sent.message_id)
+        await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  update.message.message_id)
 
     # voice message in private chat, speech to text with Azure Speech Studio and process with Azure OpenAI
     async def chat_voice(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
