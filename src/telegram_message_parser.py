@@ -518,7 +518,7 @@ class TelegramMessageParser:
             action="typing"
         )
 
-
+        #wiki
         URL = "https://zh.wikipedia.org/w/api.php"
         params = {
             "action": "query",
@@ -567,7 +567,7 @@ class TelegramMessageParser:
         mobile_page_url = data.get("content_urls", {}).get("mobile", {}).get("page","")#更多地址
         if len(mobile_page_url) > 0:
             messageall += '\n' + mobile_page_url
-
+        
         # reply response to user
         #LoggingManager.debug("Sending response to user: %s" % str(update.effective_user.id), "TelegramMessageParser")
         #await update.message.reply_text(messageall + ' ') #旧版回复消息
@@ -579,15 +579,60 @@ class TelegramMessageParser:
         #]
         #reply_markup = InlineKeyboardMarkup(keyboard)
         #新版定时删除消息
-        sent = await context.bot.send_message(
+        sent1 = await context.bot.send_message(
                 chat_id = update.effective_chat.id,
-                text = messageall + ' ',
+                text = '<b>维基百科：</b>\n' +  messageall,
                 #reply_markup=reply_markup,
                 #text = f'<pre>{table}</pre>',
                 parse_mode='HTML'
             )
+        
+        #baidu baike
+        responseBaike = requests.get('https://baike.baidu.com/api/openapi/BaikeLemmaCardApi?scope=103&;format=json&appid=379020&bk_key='+message +'&bk_length=600')
+        dataBaike = responseBaike.json()
+        num = 0
+        #print(dataBaike)
+        while(1):
+            responseBaike = requests.get('https://baike.baidu.com/api/openapi/BaikeLemmaCardApi?scope=103&;format=json&appid=379020&bk_key='+message +'&bk_length=600')
+            dataBaike = responseBaike.json()
+            #print(dataBaike)
+            if dataBaike.get("errno", 0) != 0:
+                time.sleep(2)
+                num += 1
+                if num > 5:
+                    break
+            else:
+                break
+        messageBaike = dataBaike.get("abstract", "")#概要
+        urlBaike = dataBaike.get("url","")#网址
+
+        messageBaikeAll = '未找到结果!'
+        if len(messageBaike) > 0:
+            messageBaikeAll = messageBaike + '\n' + urlBaike
+        
+        sent2 = await context.bot.send_message(
+                chat_id = update.effective_chat.id,
+                text = '<b>百度百科：</b>\n' + messageBaikeAll,
+                #reply_markup=reply_markup,
+                #text = f'<pre>{table}</pre>',
+                parse_mode='HTML'
+            )
+
+        #messageTotalAll = '<b>百度百科：</b>\n' + messageBaikeAll + '\n\n<b>维基百科：</b>\n' + messageall
+        #sent3 = await context.bot.send_message(
+        #        chat_id = update.effective_chat.id,
+        #        text = messageTotalAll + ' ',
+        #        #reply_markup=reply_markup,
+        #        #text = f'<pre>{table}</pre>',
+        #        parse_mode='HTML'
+        #    )
+
+
+
         await asyncio.sleep(300)
-        await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  sent.message_id)
+        await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  sent1.message_id)
+        await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  sent2.message_id)
+        #await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  sent3.message_id)
         await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  update.message.message_id)
 
     # voice message in private chat, speech to text with Azure Speech Studio and process with Azure OpenAI
