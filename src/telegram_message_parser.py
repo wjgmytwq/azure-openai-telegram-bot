@@ -118,7 +118,7 @@ class TelegramMessageParser:
         self.bot.add_handler(CommandHandler("info", self.info_text_command))#新增群友聊天信息
         self.bot.add_handler(CommandHandler("analy", self.analy_text_command))#新增群友聊天分析
         self.bot.add_handler(CommandHandler("wiki", self.wiki_text_command))#对接wikipedia
-
+        self.bot.add_handler(CommandHandler("dwz", self.dwz_text_command))#对接短连接后台
         
         # unknown command handler
         self.bot.add_handler(MessageHandler(filters.COMMAND, self.unknown))
@@ -217,6 +217,9 @@ class TelegramMessageParser:
         if(languageType == 'zh-cn' or languageType == 'zh-tw'):
             await self.add_text(str(update.effective_chat.id),str(update.effective_user.id),user_name,message) #不需要翻译的，加入聊天数据里
             return
+
+        ###############目前注销翻译的功能###########
+        return
 
         #没有中文则进入翻译
 
@@ -634,6 +637,48 @@ class TelegramMessageParser:
         await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  sent2.message_id)
         #await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  sent3.message_id)
         await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  update.message.message_id)
+
+# command dwz messages
+    async def dwz_text_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        #LoggingManager.info("Get a chat message (triggered by command) from user: %s" % str(update.effective_user.id), "TelegramMessageParser")
+        # get message
+        message = " ".join(context.args)
+        await self.add_text(str(update.effective_chat.id),'4','短网址接口调用',message)
+
+        # sending typing action
+        await context.bot.send_chat_action(
+            chat_id=update.effective_chat.id,
+            action="typing"
+        )
+
+        # check if user is allowed
+        allowed, _ = self.access_manager.check_user_allowed(str(update.effective_user.id))
+        if not allowed:
+            await context.bot.send_message(
+                chat_id = update.effective_chat.id,
+                text = "Sorry, you are not allowed to use this bot."
+            )
+            return
+
+
+
+        responsetmp = requests.get('https://link.ovo.cc/api/dwz/customDWZ?shortDomainNo=cx.al&customlUrl=&orginalUrl=' + message).json().get('result','')
+
+
+        # reply response to user
+        #LoggingManager.debug("Sending response to user: %s" % str(update.effective_user.id), "TelegramMessageParser")
+        #await update.message.reply_text(messageall + ' ') #旧版回复消息
+
+        #新版定时删除消息
+        sent = await context.bot.send_message(
+                chat_id = update.effective_chat.id,
+                text = responsetmp,
+                parse_mode='HTML'
+            )
+        await asyncio.sleep(300)
+        await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  sent.message_id)
+        await context.bot.delete_message(chat_id = update.effective_chat.id,message_id =  update.message.message_id)
+
 
     # voice message in private chat, speech to text with Azure Speech Studio and process with Azure OpenAI
     async def chat_voice(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
