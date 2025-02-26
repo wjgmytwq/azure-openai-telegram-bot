@@ -1,0 +1,50 @@
+{
+    "telegram": {
+        "bot_token": "6737223478:AAFOwQT61GgmzgjlTgZr4RVBISbMCU6c6V8",
+        "enable_inline_mode": true,
+        "context_expiration_time": 600
+    },
+    "openai": {
+        "api_type": "azure",
+        "api_key": "0a3c28b09125456c9f48dd05765d6916",
+        "api_base": "https://mytwq2.openai.azure.com",
+        "api_version": "2024-08-01-preview",
+	"chat_model": "gpt-4o-mini",
+        "chat_temperature": 0.9,
+        "enable_custom_system_role": true,
+        "default_system_role": "",
+        "api_timeout": 600
+    },
+    "user_management": {
+        "allow_all_users": true,
+        "allowed_users": [
+            "<USER_ID_1>", 
+            "<USER_ID_2>"
+        ],
+        "super_users": [
+            "<SUPER_USER_ID_1>",
+            "<SUPER_USER_ID_2>"
+        ]
+    },
+    "image_generation": {
+        "enable_dalle": false,
+        "limit_per_day": 5
+    },
+    "voice_message": {
+        "enable_voice": false,
+        "tts_reply": false,
+        "text_as_caption": false
+    },
+    "azure_speech": {
+        "language": "en-GB",
+        "voice": "en-GB-SoniaNeural",
+        "subscription_key": "<YOUR_AZURE_TTS_SUBSCRIPTION_KEY_HERE>",
+        "subscription_region": "<YOUR_AZURE_TTS_SUBSCRIPTION_REGION_HERE>"
+    },
+    "logging": {
+        "log_level": "INFO",
+        "log_format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        "log_path": "./log/",
+        "log_file_with_time": false
+    }
+}
