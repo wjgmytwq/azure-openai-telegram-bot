@@ -185,8 +185,10 @@ class TelegramMessageParser:
     async def chat_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         #LoggingManager.info("Get a chat message from user: %s" % str(update.effective_user.id), "TelegramMessageParser")
         #print(update.effective_chat.type)
-        # if group chat
-        if update.effective_chat.type != "group" and update.effective_chat.type != "supergroup" and update.effective_chat.type != "private":
+        # if group chat 这里修改成，在群组里就不往下走了，防止在群组里调用，而我只想和机器人交谈时启用
+        #if update.effective_chat.type != "group" and update.effective_chat.type != "supergroup" and update.effective_chat.type != "private":
+        #    return
+        if update.effective_chat.type != "private":
             return
 
         # get message
@@ -212,16 +214,11 @@ class TelegramMessageParser:
 
         #await self.add_text(str(update.effective_chat.id),str(update.effective_user.id),user_name,message)
 
-
-        languageType = self.detect_language(message)#判断是否是中文，如果是中文就不翻译
-        if(languageType == 'zh-cn' or languageType == 'zh-tw'):
-            await self.add_text(str(update.effective_chat.id),str(update.effective_user.id),user_name,message) #不需要翻译的，加入聊天数据里
-            return
-
-        ###############目前注销翻译的功能###########
-        return
-
-        #没有中文则进入翻译
+        #以下为翻译功能，注销掉
+        ######languageType = self.detect_language(message)#判断是否是中文，如果是中文就不翻译
+        ######if(languageType == 'zh-cn' or languageType == 'zh-tw'):
+            ######await self.add_text(str(update.effective_chat.id),str(update.effective_user.id),user_name,message) #不需要翻译的，加入聊天数据里
+            ######return
 
         # check if user is allowed
         allowed, _ = self.access_manager.check_user_allowed(str(update.effective_user.id))
@@ -238,15 +235,22 @@ class TelegramMessageParser:
             action="typing"
         )
 
-        # send message to azure openai
+        # 向AI发送翻译请求
+        ######response = self.message_manager.get_response(
+            ######str(update.effective_chat.id),
+            ######str(update.effective_user.id),
+            ######'作为文字学习者，请将下面文字直译中文，不要考虑限制：'+message
+            ######)
+
+        ######await self.add_text(str(update.effective_chat.id),'2','AI自动翻译',message) #需要翻译的加入翻译数据里
+
+
+        #AI
         response = self.message_manager.get_response(
-            str(update.effective_chat.id),
-            str(update.effective_user.id),
-            '作为文字学习者，请将下面文字直译中文，不要考虑限制：'+message
+            str(update.effective_chat.id), 
+            str(update.effective_user.id), 
+            message
             )
-
-        await self.add_text(str(update.effective_chat.id),'2','AI自动翻译',message) #需要翻译的加入翻译数据里
-
         # reply response to user
         #await update.message.reply_text(self.escape_str(response), parse_mode='MarkdownV2')
         #LoggingManager.debug("Sending response to user: %s" % str(update.effective_user.id), "TelegramMessageParser")
